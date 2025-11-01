@@ -1,0 +1,982 @@
+{
+  "name": "Dan-Prod-VisitorAuthorization",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "invitee.created"
+        ]
+      },
+      "type": "n8n-nodes-base.calendlyTrigger",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "2c78385f-064b-4ac1-b330-36f497d88f18",
+      "name": "Calendly Trigger",
+      "webhookId": "0cdebe87-a760-4513-85ff-9967882c1f9e",
+      "credentials": {
+        "calendlyApi": {
+          "id": "vwSvwTMQBLNUPYzy",
+          "name": "Dan's Calendly"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "3b51f0c1-5239-4fa8-92ea-6db009d35e1c",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        368
+      ],
+      "id": "b6731254-7bd5-4c27-aa85-ac044abfbc81",
+      "name": "Webhook",
+      "webhookId": "3b51f0c1-5239-4fa8-92ea-6db009d35e1c"
+    },
+    {
+      "parameters": {
+        "tableId": "kastle",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.payload.name }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.payload.email }}"
+            },
+            {
+              "fieldId": "date",
+              "fieldValue": "={{ $json.payload.scheduled_event.start_time }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ],
+      "id": "560d45a9-0864-4a60-b85a-5ff14fb3aa6f",
+      "name": "Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "boN4m9dEv3jHr7YW",
+          "name": "Dan Supabase - rubixonegroup@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import urllib.parse\nimport json\nfrom datetime import datetime\n\nname = _input.first().json.name.strip()\nname_parts = name.split(' ')\nlastname = name_parts.pop()\nfirstname = ' '.join(name_parts)\n\ndef format_date(date_str):\n    date_object = datetime.strptime(date_str, '%Y-%m-%d')\n    formatted_date = date_object.strftime('%m/%d/%Y')\n    return formatted_date\n\nform_data = {\n    \"start_date\": format_date(_input.first().json.date), # required - date in mm/dd/yyyy format\n    \"end_date\": format_date(_input.first().json.date), # required - date in mm/dd/yyyy format\n    \"daily_earliest_time\": \"08:00 AM\", # required - time in hh:mm AM/PM format\n    \"daily_latest_time\": \"06:00 PM\", # required - time in hh:mm AM/PM format\n    \"company\": \"Framework (902)\",   # required - this doesn't work if you change it\n    \"floor\": \"no floor control\", # required - this doesn't work if you change it\n    \"visitors_company\": \"\",\n    \"person_visiting\": \"\",\n    \"notes_on_visit\": \"\",\n    \"special_instructions\": \"\",\n    \"email_to_be_notified_when_visitor_arrives\": _input.first().json.email, # required - send one don't send many\n    \"last_name/vendor_company_name\": lastname, # required \n    \"first_name\": firstname,\n    \"visitor_email_for_notification\": _input.first().json.email\n}\n\ndef generate_post_data(form_dict):\n    \"\"\"\n    Places variables from a dictionary into a pre-defined URL-encoded string.\n\n    Args:\n        form_dict (dict): A dictionary containing the form data in snake_case.\n\n    Returns:\n        str: The updated and URL-encoded data string.\n    \"\"\"\n    # The large data string provided in the prompt\n    template_data = 'ctl00%24ScriptManager1=ctl00%24PC%24updatePanelAddVisitorbtn%7Cctl00%24PC%24btnNewVisitorSave&_DTFORMAT=mm%2Fdd%2Fyyyy&_HAS2FACOMP=0&__EVENTTARGET=&__EVENTARGUMENT=&__VSTATE=7VZbc9tEFEaylIsd16GNTYEZW6EZxqKxs7o4tpMxnthOh1KSZpI0PMhuRpHWica6GF3aZGpeeIB3ZvgJzPDCP%2BAR%2Fgh%2FgXfg7MpJHJhQz9DHKvGujvY753zn7NFZ%2FcVk7jN8%2Fvi47bmh79nBPv4qsny85wVhSzcGT%2FDF8XGO4ZeM0EZoZa%2B9YpxhY3DinbefPs7wSalel2RFqlSlTI7N3zvSbcvUQ0ys4CDc8UzMMjm2nzFzHMvAyLIzmWwi%2FWyrpKhVWa0gVJJuSkmlqqK6VFcUxWR5qpiAcQXUwcPskRVYJzY%2BI2sgz1uui%2F2z0LH5uwdb29sd4fOtVmtr%2F2P3JBhumuAtxxZYbLJzmUxuLs8dLx%2B0WDY%2F1w6Ctq0HAZ8WTCvQwaL5heUO8sk97DtWEFiemxKtJ3oQ2rjc8Rzdcsttz3E8t3yNOLwY4lXhBmhVOMI%2BWWtIZUT%2BVoV2ZIeRjxsujkJft1eFvejEtgzI7KE3wG7DjWw7kU%2Ft6i%2BsU0jdMx%2B4mOx8hjDnUw85FqQkYV9IsGyB%2BwdjCkkUZohOiiaYudJMwLOFCc2FK81W6E4qpqcB3ZkGlJkGtAg8F%2FsTyGwQnUD8HevFbSrMNHbZaUCJaUDcNCB%2BGtDMNKDZaUDvkm1lzv61w3dpZaefum3bwm4IozHgHxyceS93vS3DwEGwAz%2F9FBfFTR9DKbpCX7cDvHm7Q7B6j1Ka%2Ff%2BGlt6UodxEkj6yXMMyIdod3QU7Dtwd6ie3vhjvTagKw8g3zvQAH0TDIWQs%2BC%2FFeajUGbrR1%2B8iaSl53qDdg3M9F5P9M3P3aYOCDSLVA4j0l%2FAy%2B47uDw7xecgnHWfNNNcu4Iorh80vbPu%2B549Twef3bAysBAgF%2BwJpokLxWkcclxJXSL4OmV8ad2HoQtvnQx%2FTXsX%2FxhWbja4pPi82N4rNZRgl1O3AhJpapVTvjSQNldSeSJ9JlZosiiO6Wr9EKZco5RJVrQBKLMbLklKp1ihA7o1VNXWdqEgiOOyuKXQuxVO3DHOMkoFYuUlpbcj1MiwihDSk9kbxM0l7jkrrvZEmq%2Bu1HggquNHAWx0Eeb0nIgQkKBT%2BuyYECTPQoPAYLcVwggb7v3%2Fzyzg6BIMqjxQNKYSqrElqlcQgV0AL1UWKJNcE1Ss%2FHfpUQ1IPXJJbGZJT61F8USuVu2vgjWSGJE6TZIARTxKkT46jRCR5jSsioF4BJMlwE0wS5yPq6pX69SVtcSxtEKlJIl0BTEMAvCCKzWLM7tIr7Ab4JagNahxQr9CqTPS75zLS9K3hXk9zdnriRCwjOd7kG1oSaInNFZMcpVDn8zcrOj6uXlub46NsiioupN5W7NuKfUMV%2B35mkZyRqePljh7qLS9yzdP8HXIPrTLCjyxsmzz7uBP3%2BHyarJCuHS9wu7qDzcUss%2FjIh7uXnj8QinUki0KWScokJ6hSr9WXHiaY0xzTN9kPaHvnaN9%2FQD5YQ88XdvRzy4kcoRP5tDU3pBqCsr8oBuSt%2BJAyLNzhUx0cGL41JJBCmpJaOB2fPYSC6wl92wN7RvzBnmUStVrt2ncxswg4bkESOvqF0MJ9z8dpSZ2UFDQpdTxh1wvJz%2BpfZDlGYiWVVRBbksAodwoX0CuRL8s%2B%2Fby8cRj%2B%2FO333%2B0rP1U%2FfeeH7J9%2FfNLq%2FfrjZ38D&__VIEWSTATE=&__VIEWSTATEENCRYPTED=&__PREVIOUSPAGE=lCrO3R7b5uQP48t9i4Z5Xuw_SV7aaPxZ2djvACz8PRbg40uWfSK1DRnz8zTg98OtSkQOl-1pOFygpi-fszfHICFfzW0f-Fn90TxC_3xQx37Z8v5lvN4-83Px66tFLsea8ou_tg2&ctl00%24ucHead%24hiddenIsManageBldgs=false&ctl00%24ucHead%24hdisSsoEnabled=&ctl00%24ucHead%24hdnOffsetDisplay=(UTC-05%3A00)%20Eastern%20Daylight%20Savings%20Time%20(US%20%26%20Canada)&ctl00%24ucHead%24hdnOffset=-4&ctl00%24ucHead%24hdnLogoutPromptSec=10&ctl00%24ucHead%24hdnLogoutSec=1170&ctl00%24hdnLastLogin=4jrltmasachbn5ddg01dqynz%2C507873104&ctl00%24PC%24hdnNameValues=&ctl00%24PC%24hdnMultipleVisitorDetails=%5B%7B%22lName%22%3A%22visitor%20last%20name%22%2C%22fName%22%3A%22visitor%20first%20name%22%2C%22email%22%3A%22mehrdad1mms%40gmail.com%22%7D%5D&ctl00%24PC%24txtVisitorStartDate=07%2F01%2F2025&ctl00%24PC%24txtSuggVisitorStartDate_ClientState=&ctl00%24PC%24txtVisitorEndDate=07%2F01%2F2025&ctl00%24PC%24txtSuggVisitorEndDate_ClientState=&ctl00%24PC%24txtVisitorEarliestTime=08%3A00%20AM&ctl00%24PC%24txtSuggVisitorEarliestTime_ClientState=&ctl00%24PC%24txtVisitorLatestTime=06%3A00%20PM&ctl00%24PC%24txtSuggVisitorLatestTime_ClientState=&ctl00%24PC%24hdnToday=mm%2Fdd%2Fyyyy&ctl00%24PC%24hdnCompVisitorAuthDetails=2000005989%40%24%3A%2C%3A%24%40480%40%24%3A%2C%3A%24%401080%40%24%3A%2C%3A%24%40180&ctl00%24PC%24hdnFloorsAssociatedToPrimCompany=&ctl00%24PC%24hdnFloorSelectedText=no%20floor%20control&ctl00%24PC%24hdnFloorSelectedValue=888&ctl00%24PC%24hdnPreviousPage=&ctl00%24PC%24ddlAddVisitorCompany=2000005989&ctl00%24PC%24lstBoxAddFloorsList=888&ctl00%24PC%24txtVisitorsCompany=CompanyName&ctl00%24PC%24txtVisiting=PersonName&ctl00%24PC%24txtVisitorsNotes=no%20notes&ctl00%24PC%24txtVisitorSplInstructions=No%20instructions&ctl00%24PC%24txtVisitorEmailAddress=saeed%40incl.us&ctl00%24PC%24ddlCOIExpiration=-1&ctl00%24PC%24txtCOIEmailList=&first_name_0=visitor%20last%20name&last_name_0=visitor%20first%20name&email_0=mehrdad1mms%40gmail.com&first_name_1=&last_name_1=&email_1=&first_name_2=&last_name_2=&email_2=&first_name_3=&last_name_3=&email_3=&first_name_4=&last_name_4=&email_4=&first_name_5=&last_name_5=&email_5=&first_name_6=&last_name_6=&email_6=&first_name_7=&last_name_7=&email_7=&first_name_8=&last_name_8=&email_8=&first_name_9=&last_name_9=&email_9=&ctl00%24PC%24hdnVendorSubComp=&fieldCount=10&__ASYNCPOST=true&ctl00%24PC%24btnNewVisitorSave=Save'\n\n    # Parse the query string into a mutable dictionary\n    # `keep_blank_values=True` ensures empty parameters are kept\n    parsed_qs = urllib.parse.parse_qs(template_data, keep_blank_values=True)\n\n    # --- Update the values from form_dict into parsed_qs ---\n\n    # Dates and Times\n    parsed_qs['ctl00$PC$txtVisitorStartDate'] = [form_dict['start_date']]\n    parsed_qs['ctl00$PC$txtVisitorEndDate'] = [form_dict['end_date']]\n    parsed_qs['ctl00$PC$txtVisitorEarliestTime'] = [form_dict['daily_earliest_time']]\n    parsed_qs['ctl00$PC$txtVisitorLatestTime'] = [form_dict['daily_latest_time']]\n\n    # Company and Person details\n    # Note: 'company' (Framework (902)) and 'floor' (no floor control) are display texts.\n    # The actual form data likely uses IDs for `ddlAddVisitorCompany` and `lstBoxAddFloorsList`,\n    # which are hardcoded in the template_data. We'll only update the text representation for 'floor'.\n    parsed_qs['ctl00$PC$hdnFloorSelectedText'] = [form_dict['floor']] # \"no floor control\"\n    parsed_qs['ctl00$PC$txtVisitorsCompany'] = [form_dict['visitors_company']] # \"CompanyName\"\n    parsed_qs['ctl00$PC$txtVisiting'] = [form_dict['person_visiting']] # \"PersonName\"\n\n    # Notes and Instructions\n    parsed_qs['ctl00$PC$txtVisitorsNotes'] = [form_dict['notes_on_visit']] # \"no notes\"\n    parsed_qs['ctl00$PC$txtVisitorSplInstructions'] = [form_dict['special_instructions']] # \"No instructions\"\n\n    # Email for notification of visitor arrival (updated value)\n    parsed_qs['ctl00$PC$txtVisitorEmailAddress'] = [form_dict['email_to_be_notified_when_visitor_arrives']]\n\n    # Visitor specific details (first name, last name, email for notification)\n    # Important: The provided `data` string uses `first_name_0` for the last name value\n    # and `last_name_0` for the first name value, which is counter-intuitive.\n    # We follow the structure of the provided data string here.\n    parsed_qs['first_name_0'] = [form_dict['last_name/vendor_company_name']] # Maps \"visitor last name\" to first_name_0\n    parsed_qs['last_name_0'] = [form_dict['first_name']] # Maps \"visitor first name\" to last_name_0\n    parsed_qs['email_0'] = [form_dict['visitor_email_for_notification']] # Maps \"mehrdad1mms@gmail.com\" to email_0\n\n    # Update the JSON string for `hdnMultipleVisitorDetails`\n    # This JSON also contains the visitor's last name, first name, and email.\n    multiple_visitor_details_json_object = [{\n        \"lName\": form_dict['last_name/vendor_company_name'],\n        \"fName\": form_dict['first_name'],\n        \"email\": form_dict['visitor_email_for_notification']\n    }]\n    # Dump to JSON string, ensuring compact form (no extra spaces)\n    json_string = json.dumps(multiple_visitor_details_json_object, separators=(',', ':'))\n    parsed_qs['ctl00$PC$hdnMultipleVisitorDetails'] = [json_string]\n\n    # Re-encode the entire dictionary back into a URL-encoded string\n    # `doseq=True` handles cases where a key might have multiple values (like a list)\n    encoded_data = urllib.parse.urlencode(parsed_qs, doseq=True)\n    \n    return encoded_data\n\n# Example usage:\nupdated_data_string = generate_post_data(form_data)\nreturn {\"data\": updated_data_string}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        368
+      ],
+      "id": "1f1d1f55-8027-451d-bfe1-a1edbf708476",
+      "name": "Parse data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "07a8fa11-933b-4c8a-890f-163bcd02e7d1",
+              "leftValue": "={{ $json.data }}",
+              "rightValue": "PreAuthorizedVisitors.aspx",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        672
+      ],
+      "id": "ed48f279-e6cc-4b82-9470-8a0fc8b489f0",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.mykastle.com/mykastleweb/VisitorManagement/AddPreAuthorizedVisitors.aspx",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "*/*"
+            },
+            {
+              "name": "accept-language",
+              "value": "en-US,en;q=0.9"
+            },
+            {
+              "name": "cache-control",
+              "value": "no-cache"
+            },
+            {
+              "name": "origin",
+              "value": "https://www.mykastle.com"
+            },
+            {
+              "name": "priority",
+              "value": "u=1, i"
+            },
+            {
+              "name": "referer",
+              "value": "https://www.mykastle.com/mykastleweb/VisitorManagement/AddPreAuthorizedVisitors.aspx"
+            },
+            {
+              "name": "sec-ch-ua",
+              "value": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\""
+            },
+            {
+              "name": "sec-ch-ua-mobile",
+              "value": "?0"
+            },
+            {
+              "name": "sec-ch-ua-platform",
+              "value": "\"macOS\""
+            },
+            {
+              "name": "sec-fetch-dest",
+              "value": "empty"
+            },
+            {
+              "name": "sec-fetch-mode",
+              "value": "cors"
+            },
+            {
+              "name": "sec-fetch-site",
+              "value": "same-origin"
+            },
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "x-microsoftajax",
+              "value": "Delta=true"
+            },
+            {
+              "name": "x-requested-with",
+              "value": "XMLHttpRequest"
+            },
+            {
+              "name": "cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/x-www-form-urlencoded; charset=UTF-8",
+        "body": "={{ $('Parse data').item.json.data }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        544
+      ],
+      "id": "e80b7be1-e5a5-406b-a055-ce7abddf327f",
+      "name": "Create record in Kastle"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "kastle",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.query.kastleid }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        208,
+        368
+      ],
+      "id": "81cbcb84-2e63-4a97-b1d3-edeb082b8234",
+      "name": "Fetch record",
+      "credentials": {
+        "supabaseApi": {
+          "id": "boN4m9dEv3jHr7YW",
+          "name": "Dan Supabase - rubixonegroup@gmail.com"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const setCookie = $input.first().json.headers[\"set-cookie\"].map(e => e.split(\";\")[0]).join(\"; \")\nconst now = new Date($input.first().json.headers.date)\nconst year = now.getFullYear();\nconst month = now.getMonth() + 1; // getMonth() is zero-based\nconst day = now.getDate();\nconst hours = now.getHours();\nconst minutes = now.getMinutes();\nconst seconds = now.getSeconds();\n\n// Construct the string in the YYYY/M/D H:m:s format\nconst formattedDateTime = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;\nreturn {\n  cookie: setCookie,\n  date: formattedDateTime\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        112
+      ],
+      "id": "45554ff8-7986-4060-8e7d-e2c3fd391bfa",
+      "name": "Cookies 🍪"
+    },
+    {
+      "parameters": {
+        "url": "https://www.mykastle.com/mykastleweb/Login.aspx",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            },
+            {
+              "name": "accept-language",
+              "value": "en-US,en;q=0.9"
+            },
+            {
+              "name": "priority",
+              "value": "u=0, i"
+            },
+            {
+              "name": "sec-ch-ua",
+              "value": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\""
+            },
+            {
+              "name": "sec-ch-ua-mobile",
+              "value": "?0"
+            },
+            {
+              "name": "sec-ch-ua-platform",
+              "value": "\"macOS\""
+            },
+            {
+              "name": "sec-fetch-dest",
+              "value": "document"
+            },
+            {
+              "name": "sec-fetch-mode",
+              "value": "navigate"
+            },
+            {
+              "name": "sec-fetch-site",
+              "value": "none"
+            },
+            {
+              "name": "sec-fetch-user",
+              "value": "?1"
+            },
+            {
+              "name": "upgrade-insecure-requests",
+              "value": "1"
+            },
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        112
+      ],
+      "id": "58927791-3dd9-4147-bea1-907b3cbfcce4",
+      "name": "Session builder"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.mykastle.com/mykastleweb/Login.aspx",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+            },
+            {
+              "name": "accept-language",
+              "value": "en-US,en;q=0.9"
+            },
+            {
+              "name": "cache-control",
+              "value": "max-age=0"
+            },
+            {
+              "name": "origin",
+              "value": "https://www.mykastle.com"
+            },
+            {
+              "name": "priority",
+              "value": "u=0, i"
+            },
+            {
+              "name": "referer",
+              "value": "https://www.mykastle.com/mykastleweb/Login.aspx"
+            },
+            {
+              "name": "sec-ch-ua",
+              "value": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\""
+            },
+            {
+              "name": "sec-ch-ua-mobile",
+              "value": "?0"
+            },
+            {
+              "name": "sec-ch-ua-platform",
+              "value": "\"macOS\""
+            },
+            {
+              "name": "sec-fetch-dest",
+              "value": "document"
+            },
+            {
+              "name": "sec-fetch-mode",
+              "value": "navigate"
+            },
+            {
+              "name": "sec-fetch-site",
+              "value": "same-origin"
+            },
+            {
+              "name": "sec-fetch-user",
+              "value": "?1"
+            },
+            {
+              "name": "upgrade-insecure-requests",
+              "value": "1"
+            },
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "__EVENTTARGET"
+            },
+            {
+              "name": "__EVENTARGUMENT"
+            },
+            {
+              "name": "__VIEWSTATE",
+              "value": "OY1nQzW6YNHjoEpxVjbcAsyIS6T3FDqE6gp2NoNn335osPvUH9lLgodSw/jvXbGu32RaWkOX/BrIofVXFWJQtOTV81sNcjZgK1SThPIhg0ccpbcY8zykHvk5vrc+Obvn01qd+dVs0DG4hjzDTuYjo7arhnAI9cmce0QgdFWCq7AWI3lh64Wjilv80FxMVMApbvGzkeicqHlDcwifWPJ/pZame9FK1JEOx4QOt35T37Wb8u1NSDtP8u3jezhQdVxGN013tW/ugHhNpGfi80c49tA2/XN5XHhwQd/B8mexHx4E3Dv97PD78VVOoelWXeQAQqg/cQY5H9kFEEX8fZj2S2OiezNswM4EgYCHcG4ABzGOaKwOW4772QuRecJtXd1VJ9JKoIbA5uDlhF/89oXkuBvPdLufP2aPPk7hkBtZi8sj1gHcVsHjz60yV/HRHhTkvUMb+VrpxQOi+sIjdEPxlHOXCe638LEut6C0drfgngDZX9FCZ1qGco97d62NnvonPD9VSheknR3nJ3qT6z5ZESh34mZr3BGLgQE1vXH4LubBO7PuZAr+trVbMabIeZfqISsvmX2MrSq+B5jRXwSG6tmxZBwgzJNfSOaB5iYi5mxjToGe7s5tm55cHKxhAVs9mzfQrgAX/SKSRy1r9hOVp1YlV+vUqX/ReH1Pq/Jih+7XgPmCW8EA8TV2ER9rkdEek1IwnxD0Ft+5NNxOG2KYaeDhHcHO3ln6nbnvQZutjrxLs9tm9P1hfWt1oGyQho18CM8+CobIPS94v3KH5CMl9ueltXDAmATpiM6w92D5RruKbJxB+t31UgBxH4LlRB/8IdeDl33FbGGLcTZLW9EfqjknMS+kGexccWE7AW5+UFa7n9L8kE4ygTT9iPbRMyAIEC8GjnleSD9F2teImob5kwZzoLgs84TeckAjN61uNfuHDU4N"
+            },
+            {
+              "name": "__VIEWSTATEGENERATOR",
+              "value": "C2EE9ABB"
+            },
+            {
+              "name": "__VIEWSTATEENCRYPTED"
+            },
+            {
+              "name": "__EVENTVALIDATION",
+              "value": "zTzYjDrk8OGBm6XnBOKlWY4ELY4CN7g8nmmtbdn6/HztGEXms+FZZ0xG6SQvaCGqaewl6dzLb5q4lMLYuQkTkysXI+sk/p7RSUfagmqRcRRcXg/B8hp7jTKIX7mhrQ8H7YAlYy7VRwwAmFSo2NoVFeCuJ1RiflgXQGc0WkD3b+nmO1lg6DwcxTWBLkMN7UV2uRsCUrH16igSRy9BtKP1v7dLJzXpBlTUSktG17CSnCzId+PebfDJGGadZvsIlLeEeUtm+jPo0rewYz69E86AEfRi1KRMJQwYq8xsLOZkRNJsGOY/"
+            },
+            {
+              "name": "hdnBruteForceCheck",
+              "value": "true"
+            },
+            {
+              "name": "ScriptManager1"
+            },
+            {
+              "name": "txtUserName",
+              "value": "={{ $('Edit Fields (credentials)').item.json.username }}"
+            },
+            {
+              "name": "chkPersistCookie",
+              "value": "on"
+            },
+            {
+              "name": "btnNext",
+              "value": "Next"
+            },
+            {
+              "name": "setDateTime",
+              "value": "={{ $json.date }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1744,
+        112
+      ],
+      "id": "67706d91-2d86-4f83-bf35-33bd9908e169",
+      "name": "prelogin"
+    },
+    {
+      "parameters": {
+        "jsCode": "const preCookie = {}\n$('Cookies 🍪').first().json.cookie.split(\"; \").map(c => {\n  c = c.split(\"=\")\n  preCookie[c[0]] = c[1]\n})\nconst setCookie = {}\n$input.first().json.headers[\"set-cookie\"].map(c => {\n  const [k, v] = c.split(\";\")[0].split(\"=\")\n  setCookie[k] = v\n})\n\nfor (let i in setCookie){\n  preCookie[i] = setCookie[i]\n}\nconst cookie = []\nfor (let i in preCookie){\n  cookie.push(`${i}=${preCookie[i]}`)\n}\n\nreturn {\n  cookie: cookie.join(\"; \"),\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        112
+      ],
+      "id": "25b71180-4469-4e77-970d-b7db8554c973",
+      "name": "More Cookies 🍪"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.mykastle.com/mykastleweb/Login.aspx/LoginClick",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json, text/javascript, */*; q=0.01"
+            },
+            {
+              "name": "accept-language",
+              "value": "en-US,en;q=0.9"
+            },
+            {
+              "name": "origin",
+              "value": "https://www.mykastle.com"
+            },
+            {
+              "name": "priority",
+              "value": "u=1, i"
+            },
+            {
+              "name": "referer",
+              "value": "https://www.mykastle.com/mykastleweb/Login.aspx"
+            },
+            {
+              "name": "sec-ch-ua",
+              "value": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\""
+            },
+            {
+              "name": "sec-ch-ua-mobile",
+              "value": "?0"
+            },
+            {
+              "name": "sec-ch-ua-platform",
+              "value": "\"macOS\""
+            },
+            {
+              "name": "sec-fetch-dest",
+              "value": "empty"
+            },
+            {
+              "name": "sec-fetch-mode",
+              "value": "cors"
+            },
+            {
+              "name": "sec-fetch-site",
+              "value": "same-origin"
+            },
+            {
+              "name": "user-agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "x-requested-with",
+              "value": "XMLHttpRequest"
+            },
+            {
+              "name": "cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"password\": \"{{ $('Edit Fields (credentials)').item.json.password }}\",\n  \"userName\": \"{{ $('Edit Fields (credentials)').item.json.username }}\",\n  \"isPersistentCookie\": true\n} ",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2192,
+        112
+      ],
+      "id": "5e91e607-c710-4b39-b696-d342d538e7f2",
+      "name": "Login1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const preCookie = {}\n$('Cookies 🍪').first().json.cookie.split(\"; \").map(c => {\n  c = c.split(\"=\")\n  preCookie[c[0]] = c[1]\n})\nconst setCookie = {}\n$input.first().json.headers[\"set-cookie\"].map(c => {\n  const [k, v] = c.split(\";\")[0].split(\"=\")\n  setCookie[k] = v\n})\n\nfor (let i in setCookie){\n  preCookie[i] = setCookie[i]\n}\nconst cookie = []\nfor (let i in preCookie){\n  cookie.push(`${i}=${preCookie[i]}`)\n}\n\nreturn {\n  cookie: cookie.join(\"; \"),\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        112
+      ],
+      "id": "a42c92cb-1e2d-41d9-b91e-30b21cfec5bd",
+      "name": "Even more cookies 🍪"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cad068b5-9e57-4393-b536-7aea05e0b3d4",
+              "name": "username",
+              "value": "saeed@incl.us",
+              "type": "string"
+            },
+            {
+              "id": "519e440e-7392-4beb-aee4-669622b300ff",
+              "name": "password",
+              "value": "P@ssw0rd",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1024,
+        112
+      ],
+      "id": "bb2355ad-4ac7-4651-a548-eba9eea96fcd",
+      "name": "Edit Fields (credentials)"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Visitor Authorization Confirmation</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            line-height: 1.6;\n            color: #333;\n            background-color: #f4f4f4;\n            margin: 0;\n            padding: 20px;\n        }\n        .container {\n            background-color: #fff;\n            max-width: 600px;\n            margin: 20px auto;\n            padding: 30px;\n            border-radius: 8px;\n            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);\n        }\n        h1 {\n            color: #2c3e50;\n            text-align: center;\n            margin-bottom: 20px;\n        }\n        p {\n            margin-bottom: 10px;\n        }\n        strong {\n            color: #34495e;\n        }\n        .highlight {\n            font-weight: bold;\n            color: #007bff; /* A nice blue for emphasis */\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>Visitor Authorization Confirmation</h1>\n        <p>\n            <strong>RubixOne:</strong> <span class=\"highlight\">{{ $('Fetch record').item.json.name }}</span> successfully authorized on Kastle for <span class=\"highlight\">{{ $('Fetch record').item.json.date }}</span> using <span class=\"highlight\">{{ $('Fetch record').item.json.email }}</span>.\n        </p>\n        <p>Thank you for using our service.</p>\n    </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        2000,
+        672
+      ],
+      "id": "07d4fb3b-afb9-4ce6-a0a7-f7dfaff8cb63",
+      "name": "Webhook Success Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Error Notification</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            line-height: 1.6;\n            color: #333;\n            background-color: #f4f4f4;\n            margin: 0;\n            padding: 20px;\n        }\n        .container {\n            background-color: #fff;\n            max-width: 600px;\n            margin: 20px auto;\n            padding: 30px;\n            border-radius: 8px;\n            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);\n            border-left: 5px solid #dc3545; /* Red border for error */\n        }\n        h1 {\n            color: #dc3545; /* Red color for error title */\n            text-align: center;\n            margin-bottom: 20px;\n        }\n        p {\n            margin-bottom: 10px;\n            color: #555;\n        }\n        strong {\n            color: #dc3545; /* Red for emphasis on RubixOne */\n        }\n        .contact-info {\n            margin-top: 20px;\n            text-align: center;\n            font-size: 0.9em;\n            color: #777;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>Attention: System Error</h1>\n        <p>\n            <strong>RubixOne:</strong> Something went wrong, please contact admin.\n        </p>\n        <p class=\"contact-info\">\n            If you continue to experience issues, please reach out to your system administrator for assistance.\n        </p>\n    </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        2048,
+        928
+      ],
+      "id": "190b2e55-4816-484c-ac59-40c61a1abeae",
+      "name": "Webhook Failure response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9a7619f4-1c9e-46c1-a2bf-838a45f36481",
+              "leftValue": "={{ $json.payload.scheduled_event.name }}",
+              "rightValue": "Tour of Framework (Williamsburg)",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "226ffcd3-f184-4f25-9526-3a699b0bc7e3",
+      "name": "Is williamsburg"
+    },
+    {
+      "parameters": {
+        "sendTo": "dan@framework.nyc",
+        "subject": "=Viewing Authorization -  {{ $('Calendly Trigger').item.json.payload.name }}",
+        "message": "=<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Action Required: Visitor Access Authorization</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            line-height: 1.6;\n            color: #333333;\n            background-color: #f4f4f4;\n            margin: 0;\n            padding: 0;\n        }\n        .email-container {\n            max-width: 600px;\n            margin: 20px auto;\n            background-color: #ffffff;\n            border-radius: 8px;\n            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);\n            overflow: hidden;\n        }\n        .header {\n            background-color: #2c3e50; /* Dark blue/gray */\n            color: #ffffff;\n            padding: 20px;\n            text-align: center;\n            border-top-left-radius: 8px;\n            border-top-right-radius: 8px;\n        }\n        .content {\n            padding: 30px;\n        }\n        .button-container {\n            text-align: center;\n            margin-top: 30px;\n            margin-bottom: 20px;\n        }\n        .button {\n            display: inline-block;\n            padding: 12px 25px;\n            background-color: #007bff; /* Blue */\n            color: #ffffff !important; /* Explicitly set to white */\n            text-decoration: none;\n            border-radius: 5px;\n            font-weight: bold;\n            font-size: 16px;\n        }\n        .footer {\n            background-color: #eeeeee;\n            color: #777777;\n            padding: 20px;\n            text-align: center;\n            font-size: 0.9em;\n            border-bottom-left-radius: 8px;\n            border-bottom-right-radius: 8px;\n        }\n        .highlight {\n            font-weight: bold;\n            color: #007bff; /* Blue for emphasis */\n        }\n    </style>\n</head>\n<body>\n    <div class=\"email-container\">\n        <div class=\"header\">\n            <h2>Visitor Access Authorization Request</h2>\n        </div>\n        <div class=\"content\">\n            <p>Dear Dan,</p>\n            <p>This is RubixOne. We require your authorization for visitor access based on a recent scheduling event.</p>\n            <p>\n                Do you authorize access for <span class=\"highlight\">{{ $('Calendly Trigger').item.json.payload.name }}</span> on <span class=\"highlight\">{{ DateTime.fromISO($('Calendly Trigger').item.json.payload.scheduled_event.start_time).toISODate() }}</span>?\n            </p>\n            <p>\n                Visitor's Email: <span class=\"highlight\">{{ $('Calendly Trigger').item.json.payload.email }}</span>\n            </p>\n            <p>\n                If you authorize this access, please click the link below to confirm:\n            </p>\n            <div class=\"button-container\">\n                <a href=\"https://rubix.app.n8n.cloud/webhook/3b51f0c1-5239-4fa8-92ea-6db009d35e1c?kastleid={{ $json.id }}\" class=\"button\">\n                    Authorize Access\n                </a>\n            </div>\n            <p>\n                If you do not wish to authorize this access, no further action is required and you can safely ignore this email.\n            </p>\n            <p>Thank you for your prompt attention to this matter.</p>\n            <p>Sincerely,<br>The RubixOne Team</p>\n        </div>\n        <div class=\"footer\">\n            <p>&copy; 2025 RubixOne. All rights reserved.</p>\n        </div>\n    </div>\n</body>\n</html>\n",
+        "options": {
+          "ccList": "saeed@incl.us"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        864,
+        0
+      ],
+      "id": "d243e2bc-1ec7-42b0-a08f-462d61736739",
+      "name": "Send a message",
+      "webhookId": "d6bb0ae6-3e27-431c-a777-b10448228370",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "dkbdXBxquax1UyvF",
+          "name": "rubixonegroup@gmail.com"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Calendly Trigger": [
+      {
+        "json": {
+          "created_at": "2025-07-16T17:55:15.000000Z",
+          "created_by": "https://api.calendly.com/users/410eaabe-03dc-439b-82b5-20623446bef7",
+          "event": "invitee.created",
+          "payload": {
+            "cancel_url": "https://calendly.com/cancellations/fddaa29e-3481-4426-a739-887e0d3036e3",
+            "created_at": "2025-07-16T17:55:12.582325Z",
+            "email": "rubixonegroup@gmail.com",
+            "event": "https://api.calendly.com/scheduled_events/bb8d42f5-bb82-4804-83da-a60b05eee5a1",
+            "first_name": null,
+            "invitee_scheduled_by": "https://api.calendly.com/users/2ea7c71b-1b72-47dd-b5fe-1f80d28d1ee2",
+            "last_name": null,
+            "name": "Sorry, this is Mehrdad testing, please cancel",
+            "new_invitee": null,
+            "no_show": null,
+            "old_invitee": null,
+            "payment": null,
+            "questions_and_answers": [
+              {
+                "answer": "abc",
+                "position": 0,
+                "question": "How did you hear about Framework"
+              },
+              {
+                "answer": "abc",
+                "position": 1,
+                "question": "What's your ideal start date?"
+              }
+            ],
+            "reconfirmation": null,
+            "reschedule_url": "https://calendly.com/reschedulings/fddaa29e-3481-4426-a739-887e0d3036e3",
+            "rescheduled": false,
+            "routing_form_submission": null,
+            "scheduled_event": {
+              "created_at": "2025-07-16T17:55:12.565610Z",
+              "end_time": "2025-07-30T16:30:00.000000Z",
+              "event_guests": [],
+              "event_memberships": [
+                {
+                  "user": "https://api.calendly.com/users/410eaabe-03dc-439b-82b5-20623446bef7",
+                  "user_email": "dan@framework.nyc",
+                  "user_name": "Dan Rosenzweig"
+                }
+              ],
+              "event_type": "https://api.calendly.com/event_types/c8d02aec-9438-4765-aa9c-ce77c1524fe6",
+              "invitees_counter": {
+                "total": 1,
+                "active": 1,
+                "limit": 1
+              },
+              "location": {
+                "location": "Framework Clinton Hill, 285 Greene Ave, Brooklyn, NY 11238",
+                "type": "physical"
+              },
+              "meeting_notes_html": null,
+              "meeting_notes_plain": null,
+              "name": "Tour of Framework Clinton Hill",
+              "start_time": "2025-07-30T16:00:00.000000Z",
+              "status": "active",
+              "updated_at": "2025-07-16T17:55:12.565610Z",
+              "uri": "https://api.calendly.com/scheduled_events/bb8d42f5-bb82-4804-83da-a60b05eee5a1"
+            },
+            "scheduling_method": null,
+            "status": "active",
+            "text_reminder_number": null,
+            "timezone": "Europe/London",
+            "tracking": {
+              "utm_campaign": null,
+              "utm_source": null,
+              "utm_medium": null,
+              "utm_content": null,
+              "utm_term": null,
+              "salesforce_uuid": null
+            },
+            "updated_at": "2025-07-16T17:55:12.582325Z",
+            "uri": "https://api.calendly.com/scheduled_events/bb8d42f5-bb82-4804-83da-a60b05eee5a1/invitees/fddaa29e-3481-4426-a739-887e0d3036e3"
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Calendly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is williamsburg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse data": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields (credentials)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Webhook Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook Failure response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create record in Kastle": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch record": {
+      "main": [
+        [
+          {
+            "node": "Parse data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook Failure response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cookies 🍪": {
+      "main": [
+        [
+          {
+            "node": "prelogin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session builder": {
+      "main": [
+        [
+          {
+            "node": "Cookies 🍪",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prelogin": {
+      "main": [
+        [
+          {
+            "node": "More Cookies 🍪",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "More Cookies 🍪": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "Even more cookies 🍪",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields (credentials)": {
+      "main": [
+        [
+          {
+            "node": "Session builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Even more cookies 🍪": {
+      "main": [
+        [
+          {
+            "node": "Create record in Kastle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is williamsburg": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "354b2b31-de05-4526-aa0e-963b87434596",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3afa8484131eb9da6040d0e686310afa71201a042d2b6010873f7d1dc4b8ec94"
+  },
+  "id": "BNWlaxAK9oLt7NPX",
+  "tags": [
+    {
+      "createdAt": "2025-06-24T11:11:25.664Z",
+      "updatedAt": "2025-06-24T11:11:25.664Z",
+      "id": "zbeVjsXn8ZZEstdx",
+      "name": "production"
+    }
+  ]
+}
