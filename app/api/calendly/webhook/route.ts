@@ -5,7 +5,7 @@ import {
   parseCalendlyInviteeCreated,
   verifyCalendlySignature,
 } from '@/lib/calendly';
-import { insertVisitor } from '@/lib/supabase';
+import { createVisitorRecord } from '@/lib/supabase';
 import { sendApprovalEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
@@ -33,23 +33,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, ignored: true });
     }
 
-    const approvalToken = randomUUID();
-
-    await insertVisitor({
+    const visitor = await createVisitorRecord({
       name: parsed.payload.name,
       email: parsed.payload.email,
-      scheduled_for: parsed.payload.scheduled_event.start_time,
-      approval_token: approvalToken,
-      calendly_payload: parsed,
+      date: parsed.payload.scheduled_event.start_time,
+      event_name: parsed.payload.scheduled_event.name,
     });
 
     const host = process.env.APP_BASE_URL ?? new URL(request.url).origin;
-    const approvalUrl = `${host.replace(/\/$/, '')}/api/approve?token=${approvalToken}`;
+    const approvalUrl = `${host.replace(/\/$/, '')}/api/approve?kastleid=${visitor.id}`;
 
     await sendApprovalEmail({
       visitorName: parsed.payload.name,
       visitorEmail: parsed.payload.email,
-      scheduledFor: parsed.payload.scheduled_event.start_time,
+      visitDate: parsed.payload.scheduled_event.start_time,
       approvalUrl,
     });
 
