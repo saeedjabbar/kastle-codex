@@ -1,0 +1,7 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/approve/route": "app/api/approve/route.js",
+  "/page": "app/page.js",
+  "/api/calendly/route": "app/api/calendly/route.js",
+  "/api/test-email/route": "app/api/test-email/route.js"
+}

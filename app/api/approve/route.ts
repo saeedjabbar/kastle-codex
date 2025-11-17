@@ -1,156 +1,203 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getVisitorByToken,
-  markVisitorAuthorized,
-  markVisitorFailed,
-  markVisitorProcessing,
-} from '@/lib/supabase';
-import { authorizeKastleVisit } from '@/lib/kastle';
+import { getVisitorRecord, updateVisitorStatus } from '@/lib/supabase';
+import { authenticateAndCreateVisitor } from '@/lib/kastle';
 
-function formatDisplayDate(dateIso: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(dateIso));
-}
-
-function htmlResponse(html: string, status = 200) {
-  return new NextResponse(html, {
-    status,
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-store',
-    },
-  });
-}
-
-function renderSuccess(visitorName: string, visitDateIso: string, visitorEmail: string) {
-  const visitDate = formatDisplayDate(visitDateIso);
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Visitor Authorization Confirmation</title>
-    <style>
-      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
-      .container { background-color: #fff; max-width: 600px; margin: 20px auto; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
-      h1 { color: #2c3e50; text-align: center; margin-bottom: 20px; }
-      .highlight { font-weight: bold; color: #007bff; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Visitor Authorization Confirmed</h1>
-      <p>
-        RubixOne authorized <span class="highlight">${visitorName}</span> on Kastle for
-        <span class="highlight">${visitDate}</span> using
-        <span class="highlight">${visitorEmail}</span>.
-      </p>
-      <p>You're all set!</p>
-    </div>
-  </body>
-  </html>
-  `;
-}
-
-function renderFailure(errorMessage: string) {
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Authorization Error</title>
-    <style>
-      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
-      .container { background-color: #fff; max-width: 600px; margin: 20px auto; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); border-left: 5px solid #dc3545; }
-      h1 { color: #dc3545; text-align: center; margin-bottom: 20px; }
-      p { color: #555; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Access Not Authorized</h1>
-      <p>${errorMessage}</p>
-      <p>Please retry or contact the administrator.</p>
-    </div>
-  </body>
-  </html>
-  `;
-}
-
+/**
+ * Approval webhook handler
+ * Handles approval clicks from email and creates visitor in Kastle
+ */
 export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get('token');
+  const searchParams = request.nextUrl.searchParams;
+  const kastleId = searchParams.get('kastleid');
 
-  if (!token) {
-    return htmlResponse(renderFailure('Missing approval token.'), 400);
-  }
-
-  let visitor;
-
-  try {
-    visitor = await getVisitorByToken(token);
-  } catch (error) {
-    console.error('Unable to load visitor', error);
-    return htmlResponse(renderFailure('Visitor record not found.'), 404);
-  }
-
-  if (visitor.status === 'authorized') {
-    return htmlResponse(
-      renderSuccess(visitor.name, visitor.date, visitor.email),
-    );
-  }
-
-  if (visitor.status === 'failed') {
-    return htmlResponse(
-      renderFailure(
-        visitor.failure_reason ??
-          'This request previously failed. Reach out to the admin team for assistance.',
-      ),
-      409,
-    );
-  }
-
-  const username = process.env.KASTLE_USERNAME;
-  const password = process.env.KASTLE_PASSWORD;
-
-  if (!username || !password) {
-    return htmlResponse(
-      renderFailure('Kastle credentials are not configured.'),
-      500,
-    );
+  if (!kastleId) {
+    return new NextResponse(getErrorHtml('Missing visitor ID'), {
+      status: 400,
+      headers: { 'Content-Type': 'text/html' }
+    });
   }
 
   try {
-    await markVisitorProcessing(visitor.id);
+    // Fetch visitor record from Supabase
+    const visitor = await getVisitorRecord(kastleId);
 
-    await authorizeKastleVisit(
-      { username, password },
-      {
-        name: visitor.name,
-        email: visitor.email,
-        scheduledFor: visitor.date,
-      },
-    );
-
-    await markVisitorAuthorized(visitor.id);
-
-    return htmlResponse(renderSuccess(visitor.name, visitor.date, visitor.email));
-  } catch (error) {
-    console.error('Kastle authorization failed', error);
-    const message =
-      error instanceof Error ? error.message : 'Unexpected authorization error.';
-
-    try {
-      await markVisitorFailed(visitor.id, message);
-    } catch (updateError) {
-      console.error('Failed to persist failure state', updateError);
+    if (!visitor) {
+      return new NextResponse(getErrorHtml('Visitor record not found'), {
+        status: 404,
+        headers: { 'Content-Type': 'text/html' }
+      });
     }
 
-    return htmlResponse(renderFailure(message), 500);
+    // Check if already processed
+    if (visitor.status !== 'pending') {
+      return new NextResponse(
+        getSuccessHtml(visitor.name, visitor.date, visitor.email, 'already processed'),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' }
+        }
+      );
+    }
+
+    // Authenticate with Kastle and create visitor
+    const result = await authenticateAndCreateVisitor({
+      name: visitor.name,
+      email: visitor.email,
+      date: visitor.date
+    });
+
+    if (result.success) {
+      // Update status to approved
+      await updateVisitorStatus(visitor.id, 'approved');
+
+      return new NextResponse(
+        getSuccessHtml(visitor.name, visitor.date, visitor.email),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' }
+        }
+      );
+    } else {
+      // Update status to failed
+      await updateVisitorStatus(visitor.id, 'failed');
+
+      return new NextResponse(
+        getErrorHtml(`Failed to create visitor in Kastle: ${result.message || 'Unknown error'}`),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'text/html' }
+        }
+      );
+    }
+  } catch (error) {
+    console.error('Approval webhook error:', error);
+    return new NextResponse(
+      getErrorHtml(error instanceof Error ? error.message : 'Unknown error'),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'text/html' }
+      }
+    );
   }
 }
+
+function getSuccessHtml(name: string, date: string, email: string, status?: string): string {
+  const formattedDate = new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visitor Authorization Confirmation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: #fff;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        p {
+            margin-bottom: 10px;
+        }
+        strong {
+            color: #34495e;
+        }
+        .highlight {
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Visitor Authorization Confirmation</h1>
+        <p>
+            <strong>RubixOne:</strong> <span class="highlight">${name}</span> successfully authorized on Kastle for <span class="highlight">${formattedDate}</span> using <span class="highlight">${email}</span>.
+        </p>
+        ${status === 'already processed' ? '<p><em>This visitor was already processed.</em></p>' : ''}
+        <p>Thank you for using our service.</p>
+    </div>
+</body>
+</html>`;
+}
+
+function getErrorHtml(message: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: #fff;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #dc3545;
+        }
+        h1 {
+            color: #dc3545;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        p {
+            margin-bottom: 10px;
+            color: #555;
+        }
+        strong {
+            color: #dc3545;
+        }
+        .contact-info {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Attention: System Error</h1>
+        <p>
+            <strong>RubixOne:</strong> Something went wrong, please contact admin.
+        </p>
+        <p>Error: ${message}</p>
+        <p class="contact-info">
+            If you continue to experience issues, please reach out to your system administrator for assistance.
+        </p>
+    </div>
+</body>
+</html>`;
+}
+
