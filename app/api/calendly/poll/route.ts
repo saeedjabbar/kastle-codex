@@ -169,19 +169,21 @@ async function handler(request: NextRequest) {
   });
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    return await handler(request);
-  } catch (error) {
-    console.error('Calendly poll failed', error);
-    return NextResponse.json(
-      { ok: false, error: (error as Error).message },
-      { status: 500 }
-    );
+if (process.env.NODE_ENV !== 'production') {
+  export async function GET(request: NextRequest) {
+    try {
+      return await handler(request);
+    } catch (error) {
+      console.error('Calendly poll failed', error);
+      return NextResponse.json(
+        { ok: false, error: (error as Error).message },
+        { status: 500 }
+      );
+    }
   }
-}
 
-export async function POST(request: NextRequest) {
-  return GET(request);
+  export async function POST(request: NextRequest) {
+    return GET(request);
+  }
 }
 

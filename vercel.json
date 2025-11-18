@@ -4,12 +4,7 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "crons": [
-    {
-      "path": "/api/calendly/poll",
-      "schedule": "*/10 * * * *"
-    }
+  "regions": [
+    "iad1"
   ]
 }
-

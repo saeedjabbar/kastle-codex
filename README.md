@@ -90,13 +90,24 @@ The application will be available at `http://localhost:3000`
 
 ### POST `/api/calendly`
 
-Receives Calendly webhook when someone books a tour appointment.
+Primary ingress for Calendly webhooks when someone books a tour appointment. (Kept online for future use once Calendly signatures stabilize.)
 
-**Webhook Setup:**
+**Webhook Setup (optional):**
 1. Go to Calendly Integrations → Webhooks
 2. Add webhook endpoint: `https://your-domain.com/api/calendly`
 3. Select event: `invitee.created`
 4. Copy the webhook secret to `CALENDLY_WEBHOOK_SECRET`
+
+### Supabase Edge Function `calendly-poll`
+
+Background ingestion path that polls the Calendly REST API using your PAT, deduplicates against Supabase, and sends the same approval email workflow. This replaces the Vercel Cron approach.
+
+**Deploy & schedule:**
+1. Install the Supabase CLI and run `supabase functions deploy calendly-poll`.
+2. Configure required secrets via `supabase secrets set` (same values as your `.env`/Vercel env).
+3. Schedule the function to run (for example every 10 minutes):  
+   `supabase functions schedule create calendly-poll --cron "*/10 * * * *"`
+4. Tail executions with `supabase functions logs calendly-poll`.
 
 ### GET `/api/approve?kastleid={uuid}`
 
