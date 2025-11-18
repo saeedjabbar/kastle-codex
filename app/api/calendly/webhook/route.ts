@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   isFrameworkWilliamsburg,
@@ -12,8 +12,17 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
   const signatureHeader = request.headers.get('Calendly-Webhook-Signature');
+  const signatureValid = verifyCalendlySignature(rawBody, signatureHeader);
 
-  if (!verifyCalendlySignature(rawBody, signatureHeader)) {
+  if (!signatureValid) {
+    const bodyHash = createHash('sha256').update(rawBody).digest('hex');
+    console.error('Calendly signature verification failed', {
+      hasSecretConfigured: Boolean(process.env.CALENDLY_WEBHOOK_SECRET),
+      signatureHeader: signatureHeader ?? null,
+      bodyLength: rawBody.length,
+      bodySha256: bodyHash,
+    });
+
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
