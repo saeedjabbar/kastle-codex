@@ -75,6 +75,22 @@ export async function createVisitorRecord(data: {
   return visitor as KastleVisitor;
 }
 
+export async function findVisitorByEmailAndDate(email: string, date: string): Promise<KastleVisitor | null> {
+  const { data, error } = await (getSupabaseAdmin() as any)
+    .from('kastle')
+    .select('*')
+    .eq('email', email)
+    .eq('date', date)
+    .limit(1)
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to find visitor record: ${error.message}`);
+  }
+
+  return (data as KastleVisitor) ?? null;
+}
+
 export async function getVisitorRecord(id: string): Promise<KastleVisitor | null> {
   const { data, error } = await (getSupabaseAdmin() as any)
     .from('kastle')

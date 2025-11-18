@@ -32,6 +32,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 # Calendly Webhook
 CALENDLY_API_TOKEN=your-calendly-personal-access-token
 CALENDLY_WEBHOOK_SECRET=your-calendly-webhook-secret
+CALENDLY_ORGANIZATION_URI=https://api.calendly.com/organizations/your-org-id
+CALENDLY_POLL_LOOKBACK_HOURS=48
 
 # Kastle Credentials
 KASTLE_USERNAME=your-kastle-username
@@ -49,6 +51,7 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.vercel.app
 - `NEXT_PUBLIC_SUPABASE_URL` (same as `SUPABASE_URL`)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same as `SUPABASE_ANON_KEY`)
 - `CALENDLY_API_TOKEN` (personal access token used when creating webhook subscriptions)
+- `CALENDLY_ORGANIZATION_URI` (Calendly organization resource URI used for polling)
 - `SENDGRID_API_KEY` (get from SendGrid dashboard)
 - `SENDGRID_FROM_EMAIL` (your verified sender email)
 - `NEXT_PUBLIC_BASE_URL` (optional, will auto-detect on Vercel)
