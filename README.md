@@ -30,6 +30,7 @@ SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # Calendly Webhook
+CALENDLY_API_TOKEN=your-calendly-personal-access-token
 CALENDLY_WEBHOOK_SECRET=your-calendly-webhook-secret
 
 # Kastle Credentials
@@ -47,6 +48,7 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.vercel.app
 **Note:** The `.env` file already contains most variables. You need to add:
 - `NEXT_PUBLIC_SUPABASE_URL` (same as `SUPABASE_URL`)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same as `SUPABASE_ANON_KEY`)
+- `CALENDLY_API_TOKEN` (personal access token used when creating webhook subscriptions)
 - `SENDGRID_API_KEY` (get from SendGrid dashboard)
 - `SENDGRID_FROM_EMAIL` (your verified sender email)
 - `NEXT_PUBLIC_BASE_URL` (optional, will auto-detect on Vercel)

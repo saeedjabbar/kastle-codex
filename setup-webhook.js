@@ -11,7 +11,7 @@ const fs = require('fs');
 // Load environment variables from .env file
 require('dotenv').config();
 
-const CALENDLY_TOKEN = process.env.CALENDLY_WEBHOOK_SECRET;
+const CALENDLY_PAT = process.env.CALENDLY_API_TOKEN || process.env.CALENDLY_PAT;
 
 function resolveBaseUrl() {
   const explicit =
@@ -35,9 +35,28 @@ function resolveBaseUrl() {
 const APP_BASE_URL = resolveBaseUrl();
 
 const WEBHOOK_URL = `${APP_BASE_URL}/api/calendly/webhook`;
+const REPLACE_EXISTING = process.env.CALENDLY_REPLACE_EXISTING === 'true';
+const CALENDLY_SIGNING_SECRET = process.env.CALENDLY_WEBHOOK_SECRET;
 
-if (!CALENDLY_TOKEN) {
-  console.error('❌ CALENDLY_WEBHOOK_SECRET not found in .env file');
+function getWebhookId(resource) {
+  if (!resource) return undefined;
+  if (resource.id) return resource.id;
+  if (resource.uri) {
+    const segments = resource.uri.split('/');
+    return segments[segments.length - 1];
+  }
+  return undefined;
+}
+
+if (!CALENDLY_PAT) {
+  console.error('❌ Missing Calendly Personal Access Token.');
+  console.error('   Set CALENDLY_API_TOKEN (preferred) or CALENDLY_PAT in your environment.');
+  process.exit(1);
+}
+
+if (!CALENDLY_SIGNING_SECRET) {
+  console.error('❌ Missing CALENDLY_WEBHOOK_SECRET.');
+  console.error('   Set it to the value you want Calendly to sign webhooks with (use the same value in Vercel).');
   process.exit(1);
 }
 
@@ -54,7 +73,7 @@ function makeCalendlyRequest(path, options = {}) {
       path,
       method: options.method || 'GET',
       headers: {
-        'Authorization': `Bearer ${CALENDLY_TOKEN}`,
+        'Authorization': `Bearer ${CALENDLY_PAT}`,
         'Content-Type': 'application/json',
         ...options.headers
       }
@@ -65,11 +84,13 @@ function makeCalendlyRequest(path, options = {}) {
       res.on('data', (chunk) => data += chunk);
       res.on('end', () => {
         try {
-          const response = JSON.parse(data);
+          const bodyText = data.trim();
+          const response = bodyText ? JSON.parse(bodyText) : {};
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(response);
           } else {
-            reject(new Error(`API Error ${res.statusCode}: ${response.message || data}`));
+            const message = response.message || bodyText || res.statusMessage;
+            reject(new Error(`API Error ${res.statusCode}: ${message}`));
           }
         } catch (e) {
           reject(new Error(`Parse Error: ${data}`));
@@ -130,26 +151,56 @@ async function createWebhookSubscription(organizationUUID) {
     url: WEBHOOK_URL,
     events: ['invitee.created'],
     organization: `https://api.calendly.com/organizations/${organizationUUID}`,
-    scope: 'organization'
+    scope: 'organization',
+    signing_key: CALENDLY_SIGNING_SECRET
   };
 
   console.log('📤 Sending webhook data:', JSON.stringify(webhookData, null, 2));
 
-  try {
-    const response = await makeCalendlyRequest('/webhook_subscriptions', {
+  const executeCreate = () =>
+    makeCalendlyRequest('/webhook_subscriptions', {
       method: 'POST',
       data: webhookData
     });
 
+  try {
+    const response = await executeCreate();
+
+    const webhookId = getWebhookId(response.resource);
+
     console.log('✅ Webhook subscription created successfully!');
     console.log('📋 Subscription details:');
-    console.log(`   ID: ${response.resource.id}`);
-    console.log(`   URL: ${response.resource.url}`);
+    console.log(`   ID: ${webhookId ?? 'unknown'}`);
+    console.log(`   URL: ${response.resource.callback_url || response.resource.url}`);
     console.log(`   Events: ${response.resource.events.join(', ')}`);
     console.log(`   State: ${response.resource.state}`);
+    const signingSecret = response.resource.secret || response.resource.signing_key || CALENDLY_SIGNING_SECRET;
+    if (signingSecret) {
+      console.log('🔑 Webhook signing secret (add to CALENDLY_WEBHOOK_SECRET in Vercel):');
+      console.log(`   ${signingSecret}`);
+    } else {
+      console.log('⚠️  Calendly did not return a signing secret; try deleting and recreating again if needed.');
+    }
 
     return response.resource;
   } catch (error) {
+    if (error.message.includes('API Error 409') && REPLACE_EXISTING) {
+      console.log('⚠️  Webhook already exists, attempting to replace it...');
+      const existing = await checkExistingWebhooks(organizationUUID);
+      if (existing) {
+        const existingId = getWebhookId(existing);
+        if (existingId) {
+          await deleteWebhookSubscription(existingId);
+        } else {
+          console.log('ℹ️  Unable to determine webhook ID for deletion; please remove it manually in Calendly.');
+          throw error;
+        }
+        console.log('🔁 Retrying webhook creation...');
+        return createWebhookSubscription(organizationUUID);
+      }
+      console.log('ℹ️  No matching webhook found to delete; please remove it manually in Calendly.');
+    }
+
     console.error('❌ Failed to create webhook subscription:', error.message);
     console.error('🔍 Full error details:', error);
     throw error;
@@ -162,17 +213,33 @@ async function createWebhookSubscription(organizationUUID) {
 async function checkExistingWebhooks(organizationUUID) {
   console.log('🔍 Checking for existing webhooks...');
 
+  const orgUrl = `https://api.calendly.com/organizations/${organizationUUID}`;
+
+  const fetchList = async () => {
+    try {
+      return await makeCalendlyRequest(
+        `/webhook_subscriptions?scope=organization&organization=${encodeURIComponent(orgUrl)}`
+      );
+    } catch (error) {
+      if (error.message.includes('API Error 400')) {
+        console.log('ℹ️  Filtered webhook query not supported, falling back to full list');
+        return await makeCalendlyRequest('/webhook_subscriptions');
+      }
+      throw error;
+    }
+  };
+
   try {
-    const response = await makeCalendlyRequest('/webhook_subscriptions');
+    const response = await fetchList();
     const existingWebhooks = response.collection.filter(webhook =>
-      webhook.url === WEBHOOK_URL &&
+      (webhook.callback_url || webhook.url) === WEBHOOK_URL &&
       webhook.events.includes('invitee.created')
     );
 
     if (existingWebhooks.length > 0) {
       console.log('⚠️  Webhook already exists:');
       existingWebhooks.forEach(webhook => {
-        console.log(`   ID: ${webhook.id}, State: ${webhook.state}`);
+        console.log(`   ID: ${getWebhookId(webhook) ?? 'unknown'}, State: ${webhook.state}`);
       });
       return existingWebhooks[0];
     }
@@ -181,6 +248,22 @@ async function checkExistingWebhooks(organizationUUID) {
   } catch (error) {
     console.log('ℹ️  Could not check existing webhooks (this is normal):', error.message);
     return null;
+  }
+}
+
+/**
+ * Delete an existing webhook subscription
+ */
+async function deleteWebhookSubscription(webhookId) {
+  console.log(`🗑️  Deleting existing webhook ${webhookId}...`);
+  try {
+    await makeCalendlyRequest(`/webhook_subscriptions/${webhookId}`, {
+      method: 'DELETE'
+    });
+    console.log('✅ Existing webhook deleted');
+  } catch (error) {
+    console.error('❌ Failed to delete existing webhook:', error.message);
+    throw error;
   }
 }
 
@@ -199,8 +282,20 @@ async function setupWebhook() {
     // Check if webhook already exists
     const existingWebhook = await checkExistingWebhooks(orgUUID);
     if (existingWebhook) {
-      console.log('✅ Webhook is already configured!');
-      return;
+      if (REPLACE_EXISTING) {
+        const existingId = getWebhookId(existingWebhook);
+        if (existingId) {
+          await deleteWebhookSubscription(existingId);
+        } else {
+          console.log('ℹ️  Unable to determine webhook ID for deletion; please remove it manually in Calendly.');
+          return;
+        }
+      } else {
+        console.log('⚠️  A webhook for this URL already exists.');
+        console.log('    To replace it automatically, re-run with CALENDLY_REPLACE_EXISTING=true.');
+        console.log('    Example: CALENDLY_REPLACE_EXISTING=true npm run setup:webhook');
+        return;
+      }
     }
 
     // Create new webhook subscription
