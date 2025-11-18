@@ -1,11 +1,22 @@
 import { Resend } from 'resend';
 
-// Initialize Resend
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// Lazy initialization of Resend client to allow environment variables to load first
+function getResendClient(): Resend | null {
+  const apiKey = process.env.RESEND_API_KEY;
+  return apiKey ? new Resend(apiKey) : null;
+}
 
-const APPROVAL_EMAIL_FROM = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'; // Update with your verified domain
-const APPROVAL_EMAIL_TO = 'rubixone@framework.nyc';
-const APPROVAL_EMAIL_CC = 'saeed@incl.us';
+function getFromEmail(): string {
+  return process.env.RESEND_FROM_EMAIL || 'noreply@rubixone.incl.us';
+}
+
+function getToEmail(): string {
+  return process.env.DAN_NOTIFICATION_EMAIL || 'rubixone@framework.nyc';
+}
+
+function getCcEmail(): string {
+  return process.env.OPS_CC_EMAIL || 'saeed@incl.us';
+}
 
 export interface ApprovalEmailData {
   visitorName: string;
@@ -129,18 +140,40 @@ export async function sendApprovalEmail(data: ApprovalEmailData): Promise<void> 
 </html>
   `;
 
+  const resend = getResendClient();
   if (!resend) {
     throw new Error('Resend API key is not configured');
   }
 
   try {
-    await resend.emails.send({
-      from: APPROVAL_EMAIL_FROM,
-      to: APPROVAL_EMAIL_TO,
-      cc: [APPROVAL_EMAIL_CC],
+    const fromEmail = getFromEmail();
+    const toEmail = getToEmail();
+    const ccEmail = getCcEmail();
+    
+    console.log('Sending email:', {
+      from: fromEmail,
+      to: toEmail,
+      cc: ccEmail,
+      subject: `Viewing Authorization - ${visitorName}`
+    });
+
+    const result = await resend.emails.send({
+      from: fromEmail,
+      to: toEmail,
+      cc: [ccEmail],
       subject: `Viewing Authorization - ${visitorName}`,
       html
     });
+
+    console.log('Resend API response:', JSON.stringify(result, null, 2));
+    
+    if (result.error) {
+      throw new Error(`Resend API error: ${JSON.stringify(result.error)}`);
+    }
+
+    if (result.data) {
+      console.log(`✅ Email queued successfully. Email ID: ${result.data.id}`);
+    }
   } catch (error) {
     console.error('Failed to send approval email:', error);
     throw new Error(`Failed to send approval email: ${error instanceof Error ? error.message : 'Unknown error'}`);

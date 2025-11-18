@@ -24,7 +24,7 @@ const config = {
   lookbackHours: Number(Deno.env.get("CALENDLY_POLL_LOOKBACK_HOURS") ?? "48"),
   appBaseUrl: (Deno.env.get("APP_BASE_URL") ?? "https://kastle-codex.vercel.app").replace(/\/$/, ""),
   resendApiKey: Deno.env.get("RESEND_API_KEY"),
-  resendFrom: Deno.env.get("RESEND_FROM_EMAIL") ?? "RubixOne <notifications@example.com>",
+  resendFrom: Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@rubixone.incl.us",
   danEmail: Deno.env.get("DAN_NOTIFICATION_EMAIL") ?? "dan@framework.nyc",
   opsCc: Deno.env.get("OPS_CC_EMAIL") ?? "saeed@incl.us",
   supabaseUrl:
