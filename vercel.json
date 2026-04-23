@@ -6,5 +6,6 @@
   "framework": "nextjs",
   "regions": [
     "iad1"
-  ]
+  ],
+  "crons": [{ "path": "/api/ghl/poll", "schedule": "*/10 * * * *" }]
 }

@@ -26,6 +26,35 @@ export interface KastleVisitor {
   created_at: string;
 }
 
+export interface GHLContact {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  phone?: string;
+}
+
+export interface GHLAppointment {
+  id: string;
+  calendarId: string;
+  locationId: string;
+  contactId: string;
+  startTime: string;
+  endTime: string;
+  title?: string;
+  status: string;
+}
+
+export interface GHLWebhookPayload {
+  type: string;
+  locationId: string;
+  calendarId: string;
+  contactId?: string;
+  appointment: GHLAppointment;
+  contact: GHLContact;
+}
+
 export interface VisitorFormData {
   start_date: string; // mm/dd/yyyy
   end_date: string; // mm/dd/yyyy

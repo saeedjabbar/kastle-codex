@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:email": "tsx test-resend.ts",
-    "setup:webhook": "node setup-webhook.js"
+    "setup:webhook": "node setup-webhook.js",
+    "setup:ghl-webhook": "npx tsx scripts/setup-ghl-webhook.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
