@@ -100,3 +100,37 @@ export function fetchRecentAppointments(calendarId: string, startDate: string, e
 
   return ghlRequest<{ events: unknown[] }>('/calendars/events', params);
 }
+
+type GHLAppointmentEvent = {
+  id: string;
+  calendarId: string;
+  locationId: string;
+  contactId: string;
+  startTime: string;
+  endTime: string;
+  title?: string;
+  appointmentStatus: string;
+};
+
+export async function fetchContactAppointments(contactId: string): Promise<GHLAppointmentEvent[]> {
+  const data = await ghlRequest<{ events: GHLAppointmentEvent[] }>(
+    `/contacts/${contactId}/appointments`
+  );
+  return data.events ?? [];
+}
+
+const ghlWorkflowWebhookSchema = z.object({
+  email: z.string().email(),
+  contact_id: z.string().optional(),
+  id: z.string().optional(),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  full_name: z.string().optional(),
+  location_id: z.string().optional(),
+}).passthrough();
+
+export function parseGHLWorkflowWebhook(body: unknown) {
+  const parsed = ghlWorkflowWebhookSchema.safeParse(body);
+  if (!parsed.success) return null;
+  return parsed.data;
+}

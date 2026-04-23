@@ -65,7 +65,7 @@ async function resolveContact(event: GHLEvent): Promise<GHLContact | null> {
 }
 
 async function processAppointment(event: GHLEvent, baseUrl: string) {
-  if (event.status !== 'booked' && event.status !== 'confirmed') {
+  if (event.status !== 'new' && event.status !== 'booked' && event.status !== 'confirmed') {
     return { created: 0, skipped: 1 };
   }
 
