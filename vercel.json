@@ -7,5 +7,5 @@
   "regions": [
     "iad1"
   ],
-  "crons": [{ "path": "/api/ghl/poll", "schedule": "*/10 * * * *" }]
+  "crons": [{ "path": "/api/ghl/poll", "schedule": "0 */6 * * *" }]
 }

@@ -38,10 +38,11 @@ async function register() {
     body: JSON.stringify(body),
   });
 
-  const data = await res.json();
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
 
   if (!res.ok) {
-    console.error(`Failed (${res.status}):`, JSON.stringify(data, null, 2));
+    console.error(`Failed (${res.status}):`, text || res.statusText);
     process.exit(1);
   }
 
@@ -57,13 +58,15 @@ async function list() {
     headers,
   });
 
-  const data = await res.json();
+  const text = await res.text();
+  console.log(`Response status: ${res.status}`);
 
   if (!res.ok) {
-    console.error(`Failed (${res.status}):`, JSON.stringify(data, null, 2));
+    console.error(`Failed (${res.status}):`, text || res.statusText);
     process.exit(1);
   }
 
+  const data = text ? JSON.parse(text) : {};
   console.log(JSON.stringify(data, null, 2));
 }
 
